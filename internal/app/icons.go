@@ -31,7 +31,6 @@ var (
 	iconAlbum     = strokeIcon(`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>`)
 	iconPlaylist  = strokeIcon(`<path d="M3 6h13"/><path d="M3 12h13"/><path d="M3 18h9"/><path d="M21 9v9"/><circle cx="18.5" cy="18" r="2.5"/>`)
 	iconStar      = strokeIcon(`<path d="m12 3 2.7 5.8 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3.1 1.2-6.2L3 9.6l6.3-.8z"/>`)
-	iconFolder    = strokeIcon(`<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`)
 	iconCharts    = strokeIcon(`<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>`)
 	iconQueue     = strokeIcon(`<path d="M16 5H3"/><path d="M11 12H3"/><path d="M11 19H3"/><path d="M21 16V5"/><circle cx="18" cy="16" r="3"/>`)
 	iconLyrics    = strokeIcon(`<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/>`)

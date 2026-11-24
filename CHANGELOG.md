@@ -2,6 +2,19 @@
 
 All notable changes to MyGo Music are written down here. Versions follow [Semantic Versioning](https://semver.org).
 
+## [0.1.26] - 2026-11-24
+
+### Changed
+
+- The app opens on NetEase Cloud Music. Its plugin ships with the app and is put in the plugins directory on first run.
+- The built-in local files source is gone: its sidebar entry, Home, settings and folder picker are removed.
+- The app is NetEase's alone: plugin install, update and removal, the source switcher and update checking are gone, with the code behind them, and so are `examples/`, `website/`, the CI and release files, `scripts/`, and the JavaScript tooling (`package.json`, `bun.lock`).
+- Settings > Plugins is now Settings > Source, and shows the shipped source alone: who's signed in, what it asks for, and its settings.
+
+### Fixed
+
+- A `file://C:/…` URL keeps its drive on Windows, so a song on disk opens instead of reading a path relative to the working directory.
+
 ## [0.1.25] - 2026-11-14
 
 ### Added
@@ -247,6 +260,7 @@ All notable changes to MyGo Music are written down here. Versions follow [Semant
 
 The first release: a native music player that plays your local files and gets everything else from plugins.
 
+[0.1.26]: https://github.com/egoist/mygo-music/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/egoist/mygo-music/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/egoist/mygo-music/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/egoist/mygo-music/compare/v0.1.22...v0.1.23

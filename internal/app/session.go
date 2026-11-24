@@ -23,8 +23,12 @@ func sessionPath() (string, error) {
 	return filepath.Join(dir, "session.json"), nil
 }
 
-// saveSession keeps where playback is, if it moved on since last kept.
+// saveSession keeps where playback is, if it moved on since last kept. The app
+// has no player yet where it quits for want of a source.
 func (a *app) saveSession() {
+	if a.pl == nil {
+		return
+	}
 	s, ok := a.pl.Session()
 	if !ok {
 		return

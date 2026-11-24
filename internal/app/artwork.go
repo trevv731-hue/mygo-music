@@ -71,6 +71,10 @@ type artCache struct {
 // however long ago it showed them, rather than loading them again.
 const artLimit = 64 << 20
 
+// artRetryAfter is how long a cover that failed to load keeps its place before
+// the next time it's asked for fetches it again.
+const artRetryAfter = time.Minute
+
 func newArtCache(post func(func())) *artCache {
 	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]bool{}, loads: map[string]*artLoad{}, sources: map[string]*artSource{}, sem: make(chan struct{}, 8), pixels: newPixelBudget(decodePixels), post: post, now: time.Now, limit: artLimit}
 }
@@ -116,8 +120,16 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	}
 	now := c.now()
 	if a, ok := c.art[key]; ok {
-		a.used = now
-		return a
+		// A cover that failed to load, as the network dropped, is fetched
+		// again once it's asked for a while later: keeping the failure would
+		// leave the cover missing for as long as the app runs.
+		if !a.failed || now.Sub(a.used) < artRetryAfter {
+			a.used = now
+			return a
+		}
+		delete(c.art, key)
+		delete(c.gone, key)
+		c.size -= a.size
 	}
 	if a := c.gone[key].Value(); a != nil {
 		delete(c.gone, key)
@@ -142,8 +154,8 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			c.decoded += l.pixels
 			l.pixels = 0
 			c.tidyUp()
-			if l.err != nil {
-				c.add(key, &artwork{failed: true, used: c.now()})
+		if l.err != nil {
+			c.add(key, &artwork{failed: true, used: c.now()})
 				return
 			}
 			// A backdrop shares the bitmap of the cover it is of, which
@@ -412,14 +424,6 @@ func halveTo(img image.Image, px int) image.Image {
 		img, size = half, half.Bounds().Size()
 	}
 	return img
-}
-
-func fetchImage(url string) (image.Image, error) {
-	b, err := music.Fetch(url)
-	if err != nil {
-		return nil, err
-	}
-	return decodeImage(b)
 }
 
 func decodeImage(b []byte) (image.Image, error) {

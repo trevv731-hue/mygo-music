@@ -1,10 +1,14 @@
 # MyGo Music
 
-A native desktop music player written in Go with [MyGo](https://github.com/egoist/mygo), no WebView. It plays your local files out of the box, and everything else comes from plugins.
+A native desktop music player written in Go with [MyGo](https://github.com/egoist/mygo), no WebView.
+
+This build opens on **NetEase Cloud Music**: its plugin ships inside the app and is put in the plugins directory on first run. There is no built-in local files source, no plugin installer and no update check: the sources are plugins, this build ships the one it plays, and the app opens on it. Where that plugin can't be loaded, the app says so and quits rather than open a window with nothing in it.
+
+The map of what this build changed, with the source locations, is [NETEASE-BUILD.md](NETEASE-BUILD.md).
 
 ## Features
 
-- Local files (MP3, FLAC, Ogg Vorbis, WAV, and ALAC, FLAC or AAC in .m4a and .aac) with tags, covers and `.lrc` lyrics
+- NetEase Cloud Music, whose plugin ships with the app: Home, daily recommendations, charts, search, playlists, liked songs, albums, artists, podcasts, personal FM, comments and lyrics
 - Playlists, liked songs, search, albums and artists
 - Now Playing with lyric stage styles, cover wall, queue, shuffle and repeat
 - Notch player on macOS, tray, media keys
@@ -12,7 +16,12 @@ A native desktop music player written in Go with [MyGo](https://github.com/egois
 - Session restore
 - Podcast captions, written down on the device as episodes play
 - English and Simplified Chinese
-- Plugins can add accounts, catalogs, podcasts, stations, comments and pages of their own
+
+## NetEase Cloud Music
+
+The plugin ships with the app and is put in `plugins/netease` on first run, so a new install opens on it. Sign in from the player: scan the QR code with the NetEase Cloud Music app, or switch Settings > Source > NetEase Cloud Music > Sign-in method to its sign-in page. That page also sets the highest audio quality; a song plays at the lower of it and the app's Quality setting. A `MUSIC_U=…` cookie can be pasted there where signing in fails.
+
+It's an unofficial client of the service: NetEase can change, throttle or refuse its endpoints, and playback rights are the signed-in account's. Its README, with the limits, is installed beside it and in this repository at `internal/app/bundled/netease/README.md`.
 
 ## Build
 
@@ -24,16 +33,13 @@ go test ./internal/...
 
 ## Podcast captions
 
-Episodes are written down on the device as they play, with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) and Qwen3-ASR, which the app downloads when the listener asks for them. The libraries come from this repository's `sherpa-onnx-<version>` prerelease, which only changes with that version:
-
-```bash
-go run ./scripts/sherpa -sign "Developer ID Application: …"
-gh release create sherpa-onnx-2.0.1 --prerelease --latest=false build/sherpa/*
-```
+Episodes are written down on the device as they play, with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) and Qwen3-ASR, which the app downloads when the listener asks for them. The libraries come from upstream's `sherpa-onnx-<version>` prerelease, which only changes with that version; the assets and their checksums are in [`internal/speech/natives.go`](internal/speech/natives.go).
 
 ## Plugins
 
-A plugin is a folder in the app's `plugins` directory (Settings > Plugins > + > Show Plugins Folder) with a `plugin.json` and one JavaScript or TypeScript file. Install one with the + in Settings > Plugins from GitHub, by its repository or its address, or from its folder or a zip of it on this computer, or drop the folder in by hand. Remove one from its ⋯ menu there. There's nothing to build, and the same plugin runs on every platform. [`examples/demo-plugin`](examples/demo-plugin) does everything a plugin can with made-up data: copy it to start.
+A plugin is a folder in the app's `plugins` directory with a `plugin.json` and one JavaScript or TypeScript file. This build ships NetEase's in `internal/app/bundled/netease` and installs it into that directory on first run: there is no installer, no update check and no source switcher. There's nothing to build, and the same plugin runs on every platform.
+
+The rest of this section describes the plugin format, which is how the shipped NetEase plugin is written: it is what the source of this build contains, not something the app offers to add.
 
 ```json
 {
@@ -162,13 +168,11 @@ With `"playback": "stream"`, the app plays what `stream` answers. With `"playbac
 
 Throw an error with a `code` to say what's wrong: `signIn` prompts the listener to sign in, `setup` sends them to the plugin's settings, `unavailable` means this can't be played, and `unsupported` means the plugin doesn't do this. Any other error shows its message.
 
-### Publishing a plugin
+### Plugins in this build
 
-Put it in a public GitHub repository, with `plugin.json` at the top. The app takes the latest release: a `.zip` asset named for the platform, such as `plugin-darwin-arm64.zip`, or one named for none, or else the source. Without a release it takes the latest commit of the default branch. A new tag or commit is a new version, which shows as an update in the settings. An update asking for more permissions asks the listener again.
+This build has no plugin installer, no update check and no source switcher: it plays NetEase Cloud Music, whose plugin is `internal/app/bundled/netease`, embedded in the binary and put in the plugins directory on first run. A plugin dropped in by hand is loaded only when it is the one the build ships, so `mygo-music://install-plugin` links and GitHub repositories are for other builds of the app.
 
-Add the topic `mygo-music-plugin` to the repository to have it listed on the [plugins page](https://mygo-music.egoist.dev/plugins).
-
-Link to `mygo-music://install-plugin?repo=owner/repo` for an install button: it opens the app, which downloads the plugin and asks the listener before installing it. The development app (`mygo dev`) answers `mygo-music-dev://` instead.
+The plugin's own folders, for its settings and data, are under the app's user data directory, in `plugin-data/netease`.
 
 ### What a plugin can reach
 

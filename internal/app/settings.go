@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/egoist/mygo"
 
@@ -22,13 +21,6 @@ type settings struct {
 	// Captions writes down episodes as they play, for their captions, on this
 	// device, once the listener has the model.
 	Captions bool `json:"captions"`
-	// DisabledPlugins are the IDs of the plugins turned off. All are on until
-	// then, the built-in one included.
-	DisabledPlugins []string `json:"disabledPlugins,omitempty"`
-	// PluginsChecked is when plugins were last checked for new versions, once a
-	// day, and PluginUpdates the versions found, by plugin.
-	PluginsChecked time.Time         `json:"pluginsChecked,omitzero"`
-	PluginUpdates  map[string]string `json:"pluginUpdates,omitempty"`
 	// Notch shows the quick player around the notch: the listener turns
 	// it on.
 	Notch bool `json:"notch"`
@@ -90,8 +82,9 @@ type settings struct {
 	path string // where they were loaded from, and are saved to
 }
 
+// NetEase build: a first run opens on the bundled NetEase source.
 func defaultSettings() settings {
-	return settings{Language: i18n.System, NotchActivity: true, Quality: "high", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048}
+	return settings{Language: i18n.System, Source: defaultSourceID, NotchActivity: true, Quality: "high", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048}
 }
 
 func settingsPath() (string, error) {

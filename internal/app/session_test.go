@@ -107,3 +107,11 @@ func TestRestoreSessionOfGoneSource(t *testing.T) {
 		t.Errorf("playing %+v of %d", cur, len(a.pl.Queue()))
 	}
 }
+
+// The app quits for want of a source: there's no player yet, and saving the
+// session on the way out must not dereference it.
+func TestSaveSessionWithoutPlayer(t *testing.T) {
+	a := newTestApp()
+	a.pl = nil
+	a.saveSession()
+}

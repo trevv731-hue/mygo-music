@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"mygo-music/internal/i18n"
-	"mygo-music/internal/local"
 	"mygo-music/internal/music"
+	"mygo-music/internal/plugin"
 )
 
 // T returns text in the listener's language; see package i18n.
@@ -149,12 +149,7 @@ func (l *library) signedOut() bool {
 }
 
 // name is what the listener knows the source as.
-func (l *library) name() string {
-	if l.id == local.ID {
-		return T("Local Files")
-	}
-	return l.src.Info().Name
-}
+func (l *library) name() string { return l.src.Info().Name }
 
 // libOf returns the library of the source id, or nil.
 func (a *app) libOf(id string) *library {
@@ -179,12 +174,8 @@ func (a *app) trackLib(tr *music.Track) *library {
 // The others are asked once they're needed: a plugin runs from when it's first
 // asked.
 func (a *app) boot() {
-	a.keepCheckingPlugins()
 	a.startLibrary(a.library)
 	a.restoreSession()
-	if a.local != nil {
-		a.local.Rescan()
-	}
 }
 
 // startLibrary loads what the sidebar and Home show of a source, once.
@@ -209,13 +200,6 @@ func (a *app) activate(lib *library) {
 	a.dismissSuggestions()
 	a.accountOpen = false
 	a.startLibrary(lib)
-}
-
-// switchSource goes to a source's Home, as the sidebar's switcher does.
-func (a *app) switchSource(id string) {
-	if lib := a.libOf(id); lib != nil && lib != a.library {
-		a.open(route{page: pageHome, src: id})
-	}
 }
 
 // errNoAnswer stands for a source that answered nothing where it had to answer
@@ -332,4 +316,12 @@ func (a *app) reload(r route) {
 		return
 	}
 	a.load(r)
+}
+
+// pluginOf returns the plugin a source is, or nil for one that isn't.
+func pluginOf(lib *library) *plugin.Plugin {
+	if p, ok := lib.src.(*plugin.Plugin); ok {
+		return p
+	}
+	return nil
 }

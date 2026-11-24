@@ -122,7 +122,27 @@ func PathOf(u string) (string, bool) {
 	}
 	path := parsed.Path
 	if runtime.GOOS == "windows" {
-		path = strings.TrimPrefix(path, "/")
+		switch host := parsed.Host; {
+		case isDrive(host):
+			// file://C:/Music keeps the drive as the URL's host, which
+			// used to be dropped, reading a path relative to the
+			// working directory.
+			path = host + path
+		case host != "":
+			// file://server/share is a path on a server.
+			path = "//" + host + path
+		default:
+			path = strings.TrimPrefix(path, "/")
+		}
 	}
 	return filepath.FromSlash(path), true
+}
+
+// isDrive reports whether s is a Windows drive, such as C:.
+func isDrive(s string) bool {
+	if len(s) != 2 || s[1] != ':' {
+		return false
+	}
+	c := s[0]
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }

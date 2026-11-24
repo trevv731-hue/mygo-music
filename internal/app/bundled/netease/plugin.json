@@ -1,0 +1,117 @@
+{
+  "id": "netease",
+  "name": "NetEase Cloud Music",
+  "version": "1.0.0",
+  "minAppVersion": "0.1.25",
+  "main": "index.js",
+  "playback": "stream",
+  "permissions": {
+    "network": [
+      "music.163.com",
+      "*.music.163.com",
+      "*.163.com",
+      "*.126.net",
+      "*.netease.com",
+      "*.127.net"
+    ]
+  },
+  "requestHeaders": [
+    {
+      "hosts": [
+        "*.126.net"
+      ],
+      "kinds": [
+        "image",
+        "audio"
+      ],
+      "headers": {
+        "Referer": "https://music.163.com/"
+      }
+    }
+  ],
+  "settings": [
+    {
+      "key": "loginMethod",
+      "label": "Sign-in method",
+      "type": "select",
+      "help": "QR code shows a code to scan in the NetEase Cloud Music app. Sign-in page opens NetEase's own login page.",
+      "options": [
+        {
+          "value": "",
+          "label": "QR code in the app"
+        },
+        {
+          "value": "page",
+          "label": "NetEase sign-in page"
+        }
+      ]
+    },
+    {
+      "key": "maxQuality",
+      "label": "Highest quality",
+      "type": "select",
+      "help": "The best audio the plugin asks NetEase for. Automatic asks for Hi-Res and falls back to what the account may play. A song plays at the lower of this and the app's Quality setting.",
+      "options": [
+        {
+          "value": "",
+          "label": "Automatic (Hi-Res)"
+        },
+        {
+          "value": "standard",
+          "label": "Standard (128 kbps)"
+        },
+        {
+          "value": "higher",
+          "label": "Higher (192 kbps)"
+        },
+        {
+          "value": "exhigh",
+          "label": "Exhigh (320 kbps)"
+        },
+        {
+          "value": "lossless",
+          "label": "Lossless (FLAC)"
+        },
+        {
+          "value": "hires",
+          "label": "Hi-Res (FLAC)"
+        }
+      ]
+    },
+    {
+      "key": "cookie",
+      "label": "Cookie",
+      "type": "password",
+      "help": "Optional. Paste a MUSIC_U=... cookie from your browser if signing in here fails. It is stored as plain text."
+    }
+  ],
+  "navigation": [
+    {
+      "builtin": "home"
+    },
+    {
+      "title": "Daily Recommendations",
+      "page": "daily",
+      "icon": "calendar"
+    },
+    {
+      "title": "Charts",
+      "page": "charts",
+      "icon": "chart"
+    },
+    {
+      "builtin": "liked"
+    },
+    {
+      "builtin": "savedAlbums"
+    },
+    {
+      "title": "My Podcasts",
+      "builtin": "shows"
+    },
+    {
+      "title": "Personal FM",
+      "builtin": "stations"
+    }
+  ]
+}

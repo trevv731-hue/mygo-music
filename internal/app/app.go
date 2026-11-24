@@ -1,19 +1,16 @@
 package app
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"slices"
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"mygo-music/internal/i18n"
-	"mygo-music/internal/local"
 	"mygo-music/internal/music"
 	"mygo-music/internal/player"
 	"mygo-music/internal/plugin"
@@ -60,23 +57,17 @@ type app struct {
 	pl    *player.Player
 	pal   palette
 
-	// libs are the sources, the built-in one first, and what the app has of
-	// each. The active one's is embedded: a.mine is what the active source
-	// lists, and what comes back from a goroutine goes to the library it asked.
+	// libs are the sources, and what the app has of each. The active one's is
+	// embedded: a.mine is what the active source lists, and what comes back
+	// from a goroutine goes to the library it asked.
 	libs []*library
 	*library
-	local   *local.Source // the built-in source, nil in tests that have none
 	plugins []*plugin.Plugin
 	headers *headerPlugins // the plugins on, for the headers of their pictures
-	allLibs []*library     // every plugin, on or off; libs are those on
 
 	wasBehind bool // the window wasn't at the front as last built
 
 	captions  captionState    // the episode playing's captions, and the model they take
-	installer pluginInstaller // installing and updating plugins
-	// links are the app's links opened before its window was made, macOS
-	// handing over the one it was started with first.
-	links []string
 
 	route   route
 	history []route
@@ -162,7 +153,6 @@ type app struct {
 	settings    settings
 	settingsWin *mygo.Window
 	cacheUsed   int64 // the bytes the song cache takes, -1 until measured
-	updates     bool  // the update plugin is used (useUpdater)
 
 	restored     bool   // playback picked up where it was left
 	savedSession string // the session as last kept
@@ -225,80 +215,30 @@ func userDataDir(sub string) string {
 	return filepath.Join(dir, sub)
 }
 
-// makeSources makes the built-in source and those of the plugins dropped in,
-// none of them started yet, and makes active the one last used, if it's there.
+// makeSources loads the NetEase source that ships with the app, and makes it
+// the app's only source.
+//
+// NetEase build: there is no built-in local source, and other plugins in the
+// directory are ignored; the app is for NetEase Cloud Music.
 func (a *app) makeSources() {
-	a.local = local.New(userDataDir("local"))
-	builtIn := newLibrary(a.local)
-	a.allLibs = []*library{builtIn}
 	plugin.SetOpenURL(mygo.Shell.OpenExternal)
 	plugin.SetAppVersion(mygo.App.Version())
 	plugin.SetWebSignIn(a.webSignIn)
+	installBundledPlugins(pluginsDir())
 	a.plugins = plugin.Discover(pluginsDir(), userDataDir("plugin-data"))
 	a.headers = &headerPlugins{}
 	music.ImageHeaders = a.headers.image
 	for _, p := range a.plugins {
+		if p.Info().ID != defaultSourceID {
+			continue
+		}
 		lib := newLibrary(p)
-		if !slices.ContainsFunc(a.allLibs, func(l *library) bool { return l.id == lib.id }) {
-			a.allLibs = append(a.allLibs, lib)
-		}
-	}
-	a.enabledChanged()
-	a.library = a.libs[0]
-	if lib := a.libOf(a.settings.Source); lib != nil {
+		a.libs = []*library{lib}
 		a.library = lib
+		a.headers.set([]*plugin.Plugin{p})
+		a.route = route{page: pageHome, src: lib.id}
+		return
 	}
-	a.route = route{page: pageHome, src: a.library.id}
-	a.local.OnChange(func() {
-		a.post(func() { a.libraryChanged(builtIn) })
-	})
-}
-
-// enabledChanged lists the plugins that are on. There's always one: with all of
-// them off in the settings, as by hand, it's the built-in one.
-func (a *app) enabledChanged() {
-	a.libs = nil
-	for _, lib := range a.allLibs {
-		if !slices.Contains(a.settings.DisabledPlugins, lib.id) {
-			a.libs = append(a.libs, lib)
-		}
-	}
-	if len(a.libs) == 0 && len(a.allLibs) > 0 {
-		a.libs = a.allLibs[:1]
-	}
-	if a.headers != nil {
-		var on []*plugin.Plugin
-		for _, lib := range a.libs {
-			if p := pluginOf(lib); p != nil {
-				on = append(on, p)
-			}
-		}
-		a.headers.set(on)
-	}
-}
-
-// setPluginEnabled turns a plugin on or off. Off, it stops, its pages go, and if
-// it's the one showing, the first one on takes over; its songs still queued say
-// they're gone. The last one on can't go.
-func (a *app) setPluginEnabled(lib *library, on bool) {
-	disabled := slices.DeleteFunc(slices.Clone(a.settings.DisabledPlugins), func(id string) bool { return id == lib.id })
-	if !on {
-		if len(a.libs) == 1 && a.libs[0] == lib {
-			return
-		}
-		disabled = append(disabled, lib.id)
-	}
-	a.settings.DisabledPlugins = disabled
-	a.enabledChanged()
-	if !on {
-		if a.library == lib {
-			a.switchSource(a.libs[0].id)
-		}
-		if closer, ok := lib.src.(interface{ Close() }); ok {
-			go closer.Close()
-		}
-	}
-	a.changed()
 }
 
 // pluginsDir is where plugins are dropped in.
@@ -334,7 +274,9 @@ func Run() error {
 		queueAt:     -1,
 		cacheUsed:   -1,
 	}
-	a.useUpdater(i18n.Resolve(loadSettings().Language, systemLanguages()))
+	// NetEase build: no updater. This build plays NetEase out of the box, and
+	// an update from the app's repository would put its local files first
+	// again. Settings says the app's version, and nothing checks for another.
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
 		a.settings.applyAppearance()
@@ -344,6 +286,14 @@ func Run() error {
 			go retroBitmaps() // rendered before Now Playing first shows them
 		}
 		a.makeSources()
+		if a.library == nil {
+			// NetEase build: without the shipped plugin there is nothing to
+			// show. Say so, and quit rather than open a window with nothing
+			// in it.
+			mygo.Dialog.Error(mygo.App.Name(), T("NetEase Cloud Music could not load. Reinstall MyGo Music."))
+			mygo.App.Quit()
+			return
+		}
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
@@ -396,10 +346,6 @@ func Run() error {
 		// Shown or switched to a while after, it shows what's new.
 		a.win.OnFocus(a.freshenHome)
 		a.applyTray()
-		for _, link := range a.links {
-			a.openLink(link)
-		}
-		a.links = nil
 		if shotHook != nil {
 			shotHook(a)
 		}
@@ -435,19 +381,5 @@ func Run() error {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
 	mygo.App.OnSecondInstance(func([]string, string) { a.showMain() })
-	// The installed app's scheme is registered as it's installed; the
-	// development app, which isn't, registers its own every time it starts.
-	if mygo.IsDev() {
-		if err := mygo.App.RegisterURLScheme(linkScheme); err != nil {
-			log.Printf("registering %s links: %v", linkScheme, err)
-		}
-	}
-	mygo.App.OnOpenURL(func(link string) {
-		if a.win == nil {
-			a.links = append(a.links, link)
-			return
-		}
-		a.openLink(link)
-	})
 	return mygo.App.Run()
 }

@@ -1,18 +1,15 @@
 package app
 
 import (
-	"os"
 	"runtime"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"mygo-music/internal/i18n"
-	"mygo-music/internal/local"
 	"mygo-music/internal/music"
 	"mygo-music/internal/plugin"
 )
@@ -91,9 +88,6 @@ func (a *app) setLanguage(code string) {
 	}
 	if a.settingsWin != nil {
 		a.settingsWin.SetTitle(T("Settings"))
-	}
-	if lib := a.libOf(local.ID); lib != nil {
-		a.libraryChanged(lib)
 	}
 	// A plugin's pages are in the language it was asked in.
 	if lib := a.library; pluginOf(lib) != nil {
@@ -212,16 +206,11 @@ func (a *app) settingsView(c *ui.Context) {
 			header := ui.Row(c.Key("header")).Absolute().Top(0).Left(0).Right(0).Height(topBar(c)).Padding(0, right, 0, 32).AlignItems(ui.Center).DragWindow()
 			header.Children(func() {
 				ui.Text(c, title).FontSize(15).FontWeight(700).SingleLine().Shrink(1).MinWidth(0)
-				if query == "" && current.id == "plugins" {
-					ui.Box(c).Grow(1)
-					a.installMenu(c, p)
-				}
 			})
 			// The pointer over it brings the edge up too, as AppKit's does.
 			edge.Opacity(edgeShown(edge, a.settingsUnderTop || header.Hovered()))
 		})
 	})
-	a.installDialog(c, p)
 	a.signInDialog(c, p, true)
 }
 
@@ -390,7 +379,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		}
 	})
 
-	add("plugins", T("Plugins"), iconPlug, func(row settingsRow, block settingsBlock) { a.sourceSettings(c, row, block, p) })
+	add("source", T("Source"), iconPlug, func(_ settingsRow, block settingsBlock) { a.sourceSettings(c, block, p) })
 
 	// Only on macOS, the one with a notch player.
 	if a.notch != nil {
@@ -488,31 +477,6 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		})
 	})
 
-	if a.updates {
-		add("updates", T("Updates"), iconRefresh, func(row settingsRow, block settingsBlock) {
-			desc := T("Check for a new version once a day")
-			if t := lastUpdateCheck(); !t.IsZero() {
-				desc = Tf("Check for a new version once a day. Last checked: %s", i18n.Ago(t, time.Now()))
-			}
-			row(T("Check for Updates Automatically"), desc, func() {
-				on := updateChecks()
-				if ui.Switch(c.Key("update-checks"), &on).Label(T("Check for Updates Automatically")).Changed() {
-					setUpdateChecks(on)
-				}
-			})
-			row(T("Download and Install Automatically"), T("Download new versions in the background, to take effect the next time the app opens"), func() {
-				on := updateDownloads()
-				if ui.Switch(c.Key("update-downloads"), &on).Label(T("Download and Install Automatically")).Disabled(!updateChecks()).Changed() {
-					setUpdateDownloads(on)
-				}
-			})
-			row(Tf("Current Version %s", mygo.App.Version()), "", func() {
-				if ui.Button(c.Key("check-updates"), T("Check for Updates")).Clicked() {
-					checkForUpdates()
-				}
-			})
-		})
-	}
 	return sections
 }
 
@@ -526,74 +490,23 @@ func (a *app) anyCan(what string) bool {
 	return false
 }
 
-// sourceSettings lists the sources, each with what it asks of the listener,
-// and where more of them come from.
-func (a *app) sourceSettings(c *ui.Context, row settingsRow, block settingsBlock, p palette) {
-	for _, lib := range a.allLibs {
-		if lib.id == local.ID {
-			a.localSettings(c, lib, row, block, p)
-			continue
-		}
-		text := lib.name()
-		for _, st := range lib.src.Info().Settings {
-			text += " " + st.Label + " " + st.Help
-		}
-		block(text, func() { a.pluginSettings(c.Key(lib.id), lib, p) })
-	}
-}
-
-// revealFolder shows a folder in the file manager, making it if need be;
-// tests replace it.
-var revealFolder = func(dir string) {
-	os.MkdirAll(dir, 0o755)
-	mygo.Shell.OpenPath(dir)
-}
-
-// localSettings are the folders of the built-in source.
-func (a *app) localSettings(c *ui.Context, lib *library, row settingsRow, block settingsBlock, p palette) {
-	if a.local == nil {
+// sourceSettings lists the app's source, with what it asks of the listener.
+func (a *app) sourceSettings(c *ui.Context, block settingsBlock, p palette) {
+	lib := a.library
+	if lib == nil {
 		return
 	}
-	folders := a.local.Folders()
-	desc := T("Add the folders where your music lives")
-	if a.local.Scanning() {
-		desc = T("Looking for music…")
-	} else if len(folders) > 0 {
-		desc = Tf("%d songs found", a.local.TrackCount())
+	text := lib.name()
+	for _, st := range lib.src.Info().Settings {
+		text += " " + st.Label + " " + st.Help
 	}
-	enabled := a.pluginEnabled(lib)
-	desc = T("Built-in") + " · " + desc
-	row(T("Local Files"), desc, func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			if enabled && len(folders) > 0 && ui.Button(c.Key("rescan"), T("Rescan")).Disabled(a.local.Scanning()).Clicked() {
-				a.local.Rescan()
-			}
-			if enabled && ui.Button(c.Key("add-folder"), T("Add Folder…")).Clicked() {
-				a.addMusicFolder()
-			}
-			a.pluginSwitch(c, lib)
-		})
-	})
-	if !enabled {
-		return
-	}
-	for _, dir := range folders {
-		block(dir, func() {
-			ui.Row(c.Key(dir)).Padding(8, 16).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Icon(c, iconFolder).Size(15, 15).TextColor(p.muted)
-				ui.Text(c, dir).FontSize(12.5).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-				if ui.Button(c.Key("remove"), T("Remove")).Clicked() {
-					a.local.RemoveFolder(dir)
-				}
-			})
-		})
-	}
+	block(text, func() { a.pluginSettings(c.Key(lib.id), lib, p) })
 }
 
-// pluginSettings is a plugin: who's signed in, and what it asks of the listener.
+// pluginSettings is the app's source: who's signed in, and what it asks of the
+// listener.
 func (a *app) pluginSettings(c *ui.Context, lib *library, p palette) {
 	info := lib.src.Info()
-	enabled := a.pluginEnabled(lib)
 	ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
 		ui.Row(c).Gap(10).AlignItems(ui.Center).MinHeight(24).Children(func() {
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
@@ -602,36 +515,14 @@ func (a *app) pluginSettings(c *ui.Context, lib *library, p palette) {
 					name += " " + info.Version
 				}
 				ui.Text(c, name).FontSize(13.5).FontWeight(500)
-				// Where it came from, a link to its repository, and who's signed
-				// in, on one line.
-				from, url := pluginFrom(lib)
-				signedIn := ""
-				if enabled && !lib.needsSetup && lib.account != nil {
-					signedIn = Tf("Signed in as %s", lib.account.Name)
+				if !lib.needsSetup && lib.account != nil {
+					ui.Text(c, Tf("Signed in as %s", lib.account.Name)).FontSize(12).TextColor(p.muted).SingleLine().Shrink(1).MinWidth(0)
 				}
-				if from != "" || signedIn != "" {
-					ui.Row(c).MinWidth(0).Children(func() {
-						if url != "" {
-							ui.Link(c, from, url).FontSize(12).TextColor(p.muted).SingleLine().Shrink(0).Tooltip(T("Open on GitHub"))
-						} else if from != "" {
-							ui.Text(c, from).FontSize(12).TextColor(p.muted).SingleLine().Shrink(0)
-						}
-						if signedIn != "" {
-							if from != "" {
-								signedIn = " · " + signedIn
-							}
-							ui.Text(c, signedIn).FontSize(12).TextColor(p.muted).SingleLine().Shrink(1).MinWidth(0)
-						}
-					})
-				}
-				if enabled && lib.needsSetup {
+				if lib.needsSetup {
 					ui.Text(c, setupNotice(lib, info)).FontSize(12).TextColor(p.accent).LineHeight(1.4)
 				}
-				a.pluginUpdateError(c, lib, p)
 			})
-			a.pluginUpdateButton(c, lib)
 			switch {
-			case !enabled:
 			case lib.account == nil && lib.accountUnknown():
 				// A source not yet used hasn't said who's signed in: asked now, its
 				// row offers no sign-in to someone who already is.
@@ -645,12 +536,7 @@ func (a *app) pluginSettings(c *ui.Context, lib *library, p palette) {
 					a.promptSignInInSettings(lib)
 				}
 			}
-			a.pluginMenu(c, lib, p)
-			a.pluginSwitch(c, lib)
 		})
-		if !enabled {
-			return
-		}
 		if g, ok := lib.src.(guarded); ok {
 			a.pluginPermissions(c.Key("permissions"), lib, g, p)
 		}
@@ -678,18 +564,6 @@ func setupNotice(lib *library, info music.Info) string {
 		return Tf("Fill in %s for it to work", strings.Join(empty, ", "))
 	}
 	return Tf("%s needs setting up first", lib.name())
-}
-
-// pluginEnabled reports whether a plugin is on.
-func (a *app) pluginEnabled(lib *library) bool { return slices.Contains(a.libs, lib) }
-
-// pluginSwitch turns a plugin on or off; the last one on stays.
-func (a *app) pluginSwitch(c *ui.Context, lib *library) {
-	on := a.pluginEnabled(lib)
-	last := on && len(a.libs) == 1
-	if ui.Switch(c.Key("enabled"), &on).Label(Tf("Enable %s", lib.name())).Disabled(last).Changed() {
-		a.setPluginEnabled(lib, on)
-	}
 }
 
 // guarded is a source with permissions: a plugin.

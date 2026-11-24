@@ -114,6 +114,23 @@ func TestArtCacheKeepsCoversUnderLimit(t *testing.T) {
 	}
 }
 
+// A cover that failed to load is fetched again once it's asked for a while
+// later. One failed fetch, of a network that dropped, kept its cover missing
+// for as long as the app ran.
+func TestArtCacheRetriesFailedCovers(t *testing.T) {
+	now := time.Unix(1e9, 0)
+	c := newArtCache(func(func()) {})
+	c.now = func() time.Time { return now }
+	c.add("cover", &artwork{failed: true, used: now})
+	if got := c.get("cover", false); got == nil || !got.failed {
+		t.Fatal("dropped a cover that failed, asked for at once")
+	}
+	now = now.Add(artRetryAfter)
+	if got := c.get("cover", false); got != nil {
+		t.Error("kept a cover that failed past its time")
+	}
+}
+
 // A cover dropped while something still holds it comes back as it was.
 // It loaded again: Now Playing's cover went while other pages showed,
 // though Now Playing still held it, and flashed in once it opened again.

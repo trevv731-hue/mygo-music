@@ -8,7 +8,6 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"mygo-music/internal/local"
 	"mygo-music/internal/music"
 )
 
@@ -30,12 +29,14 @@ var saveSongAs = func(a *app, name string) string {
 	return path
 }
 
+// NetEase build: there is no local source to leave out of downloads any more.
+//
 // canDownload reports whether tr can be saved to a file of the listener's: a
-// song its source streams for the app to play, rather than one already on disk
-// or one that plays elsewhere.
+// song its source streams for the app to play, rather than one that plays
+// elsewhere.
 func (a *app) canDownload(tr *music.Track) bool {
 	lib := a.trackLib(tr)
-	return lib != nil && lib.id != local.ID && lib.can("stream") &&
+	return lib != nil && lib.can("stream") &&
 		lib.src.Info().Playback == music.PlaybackStream && !tr.Unavailable
 }
 
